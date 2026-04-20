@@ -10,9 +10,9 @@ Data Reliability Autopilot is an intelligent SRE tool that **classifies data pip
 
 ---
 
-## ⚡ Interview Quick Start (Copy-Paste Ready)
+## ⚡ Quick Start
 
-> **Everything below runs without GPU, API keys, or Docker.** Just Python 3.11+.
+> **Runs without GPU, API keys, or Docker.** Just Python 3.11+.
 
 ### Step 1 — Clone & Setup (30 seconds)
 
@@ -87,7 +87,7 @@ curl -s -X POST http://localhost:8000/failures/analyze \
 
 **Expected: `"category": "schema_drift"` with schema migration as top remediation.**
 
-### Step 5 — Launch Streamlit Dashboard (optional, impressive for live demo)
+### Step 5 — Launch Streamlit Dashboard (optional)
 
 ```bash
 streamlit run ui.py
@@ -103,35 +103,24 @@ ruff check app/ tests/
 
 ---
 
-## 🎯 Interview Talking Points
+## 🎯 How It Works
 
-### "Walk me through how this works"
+1. Pipeline failure is reported via `/failures/analyze` with error message, context, and failing SQL
+2. **Failure Classifier** runs 30+ regex patterns across 7 categories (schema drift, data quality, SQL error, timeout, dependency failure, resource exhaustion, permission error)
+3. Each match has a confidence score; multiple matches in the same category boost confidence
+4. **Remediation Engine** proposes 3-4 ranked recovery actions based on the failure category (retry, quarantine bad rows, rollback, apply schema migration, fix SQL, skip-and-alert)
+5. For SQL-related fixes, the engine generates actual SQL: `TRY_CAST` for type issues, deduplication for duplicate keys, `COALESCE` for nulls
+6. **Sandbox Validator** executes the proposed SQL in an isolated in-memory DuckDB instance with safety checks (blocked patterns: DROP DATABASE, ATTACH, COPY TO, etc.)
+7. **Human-in-the-loop**: operator reviews results, can sandbox-test different remediation options, then approve or reject
+8. State machine tracks the full lifecycle: `pending → analyzing → awaiting_approval → sandbox_testing → approved → applied / rejected / rolled_back`
 
-> 1. Pipeline failure is reported via `/failures/analyze` with error message, context, and failing SQL
-> 2. **Failure Classifier** runs 30+ regex patterns across 7 categories (schema drift, data quality, SQL error, timeout, dependency failure, resource exhaustion, permission error)
-> 3. Each match has a confidence score; multiple matches in the same category boost confidence
-> 4. **Remediation Engine** proposes 3-4 ranked recovery actions based on the failure category (retry, quarantine bad rows, rollback, apply schema migration, fix SQL, skip-and-alert)
-> 5. For SQL-related fixes, the engine generates actual SQL: `TRY_CAST` for type issues, deduplication for duplicate keys, `COALESCE` for nulls
-> 6. **Sandbox Validator** executes the proposed SQL in an isolated in-memory DuckDB instance with safety checks (blocked patterns: DROP DATABASE, ATTACH, COPY TO, etc.)
-> 7. **Human-in-the-loop**: operator reviews results, can sandbox-test different remediation options, then approve or reject
-> 8. State machine tracks the full lifecycle: `pending → analyzing → awaiting_approval → sandbox_testing → approved → applied / rejected / rolled_back`
+### Why Deterministic-First?
 
-### "Why not just use ChatGPT?"
-
-> The classifier is **deterministic** — same input always gives same classification and remediation proposals. AI is supplementary, not required.
-> The tool works fully offline with `AI_BACKEND=none`. This is critical for:
-> - **Reliability** — no API outages affect the failure classification
-> - **Auditability** — every classification is traceable to specific regex patterns with confidence scores
-> - **Speed** — classification runs in microseconds vs seconds for LLM calls
-> - **Safety** — sandbox SQL execution is isolated and safety-checked before human approval
-
-### "How is this different from a prompt wrapper?"
-
-> - 30+ regex patterns across 7 failure categories with confidence scoring (`classifier.py`)
-> - Ranked remediation strategies with actual SQL fix generation (`remediation.py`)
-> - DuckDB sandbox that executes and validates SQL in memory with safety guards (`sandbox.py`)
-> - Full state machine with human-in-the-loop approval workflow
-> - 133 unit + integration tests at 97% coverage — the classifier and sandbox are tested independently of AI
+The classifier is **deterministic** — same input always gives same classification and remediation proposals. AI is supplementary, not required. The tool works fully offline with `AI_BACKEND=none`. This matters for:
+- **Reliability** — no API outages affect the failure classification
+- **Auditability** — every classification is traceable to specific regex patterns with confidence scores
+- **Speed** — classification runs in microseconds vs seconds for LLM calls
+- **Safety** — sandbox SQL execution is isolated and safety-checked before human approval
 
 ---
 
