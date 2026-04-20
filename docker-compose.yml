@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  # ── FastAPI Backend ───────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: autopilot-api
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTOPILOT_AI_BACKEND=ollama
+      - AUTOPILOT_OLLAMA_URL=http://ollama:11434/api/generate
+      - AUTOPILOT_OLLAMA_MODEL=llama3
+      - AUTOPILOT_DB_PATH=:memory:
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - autopilot
+
+  # ── Streamlit UI ──────────────────────────────────────────────────────────
+  ui:
+    build: .
+    container_name: autopilot-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - AUTOPILOT_API_URL=http://api:8000
+    command: ["streamlit", "run", "ui.py", "--server.port=8501", "--server.headless=true"]
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - autopilot
+
+  # ── Ollama (Local LLM) ───────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: autopilot-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - autopilot
+
+volumes:
+  ollama_data:
+
+networks:
+  autopilot:
+    driver: bridge
